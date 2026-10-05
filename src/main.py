@@ -106,17 +106,61 @@ def diff_lines(a, b):
     result.extend((" ", a[i]) for i in range(end_a, n))
     return result
 
+def to_ranges(indexes):
+    """Turn sorted positions like [3,4,5,9] into '3-6,9-10'. Empty -> '.'"""
+    if not indexes:
+        return "."
+    parts = []
+    start = prev = indexes[0]
+    for i in indexes[1:]:
+        if i == prev + 1:                    # touching -> same range
+            prev = i
+        else:
+            parts.append(f"{start}-{prev + 1}")   # end is not included
+            start = prev = i
+    parts.append(f"{start}-{prev + 1}")
+    return ",".join(parts)
 
-def format_lines(edits):
-    """Print the diff. Inside each change block, all - lines come before + lines."""
+
+def char_ranges(old_line, new_line):
+    """Myers on the characters of one line pair. Returns (old ranges, new ranges)."""
+    s = old_line.decode("utf-8")             # str indexes count code points, so 😀 = 1
+    t = new_line.decode("utf-8")
+    n, m = len(s), len(t)
+
+    # skip common start and end (same trick as Part A)
+    start = 0
+    while start < n and start < m and s[start] == t[start]:
+        start += 1
+    end_s, end_t = n, m
+    while end_s > start and end_t > start and s[end_s - 1] == t[end_t - 1]:
+        end_s -= 1
+        end_t -= 1
+
+    A, B = s[start:end_s], t[start:end_t]
+    old_idx, new_idx = [], []
+    if A or B:
+        for tag, x, y in backtrack(shortest_edit(A, B), len(A), len(B)):
+            if tag == "-":
+                old_idx.append(start + x)    # deleted character in old line
+            elif tag == "+":
+                new_idx.append(start + y)    # inserted character in new line
+    return to_ranges(old_idx), to_ranges(new_idx)
+
+def format_lines(edits, highlight=False):
+    """Print the diff. Inside each change block, all - lines come before + lines.
+    With highlight=True, add a '?' line after each paired + line."""
     out = []
     dels, ins = [], []
 
     def flush():
         for line in dels:
             out.append(b"-" + line + b"\n")
-        for line in ins:
+        for i, line in enumerate(ins):
             out.append(b"+" + line + b"\n")
+            if highlight and i < len(dels):          # i-th + pairs with i-th -
+                old_r, new_r = char_ranges(dels[i], line)
+                out.append(f"? {old_r} | {new_r}\n".encode())
         dels.clear()
         ins.clear()
 
@@ -147,7 +191,7 @@ def main():
         sys.exit(2)
 
     edits = diff_lines(a, b)
-    out = format_lines(edits)            # highlight: same for now, Part B comes later
+    out = format_lines(edits, command == "highlight")
     sys.stdout.buffer.write(b"".join(out))
 
 

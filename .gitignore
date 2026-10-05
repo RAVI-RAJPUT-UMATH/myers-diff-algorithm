@@ -11,3 +11,6 @@ mydiff.exe
 .idea/
 *.swp
 .DS_Store
+big_old.txt
+big_new.txt
+gen_big.py
